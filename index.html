@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Simulador</title>
+<style>
+html, body { height: 100%; margin: 0; }
+body { display: grid; place-items: center; background: #0e2040; color: #eaf1fb; font: 15px system-ui, sans-serif; }
+</style>
+</head>
+<body>
+<p id="msg">Abrindo o simulador...</p>
+<script type="module">
+// The page is encrypted in data.bin. The key travels in the link fragment, which never reaches the server.
+try {
+  const m = /^#k=([A-Za-z0-9_-]{43})$/.exec(location.hash);
+  if (!m) throw new Error('Link incompleto: falta a chave.');
+  const raw = Uint8Array.from(atob(m[1].replace(/-/g, '+').replace(/_/g, '/') + '='), (c) => c.charCodeAt(0));
+  const key = await crypto.subtle.importKey('raw', raw, 'AES-GCM', false, ['decrypt']);
+  const res = await fetch('data.bin', { cache: 'no-cache' });
+  if (!res.ok) throw new Error(`Arquivo indisponível (${res.status}).`);
+  const buf = await res.arrayBuffer();
+  let plain;
+  try {
+    plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: buf.slice(0, 12) }, key, buf.slice(12));
+  } catch {
+    throw new Error('Chave errada: peça o link completo.');
+  }
+  const html = await new Response(new Blob([plain]).stream().pipeThrough(new DecompressionStream('gzip'))).text();
+  document.open();
+  document.write(html);
+  document.close();
+} catch (e) {
+  document.getElementById('msg').textContent = e.message;
+}
+</script>
+</body>
+</html>
